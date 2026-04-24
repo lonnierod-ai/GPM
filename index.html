@@ -431,13 +431,16 @@ select.fs{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font
 // ─────────────────────────────────────────────────────────────────
 const GPM_CLIENT_ID = '757167453653-19a66d7blm6k2gk0dp10p4n1h0o7ht4g.apps.googleusercontent.com'; // ← PASTE YOUR CLIENT ID HERE
 
-const SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
+const SCOPES='https://www.googleapis.com/auth/drive';
 const ROOT='GPM Media Library';
 const TI={photo:'🖼',video:'🎬',reel:'📱',raw:'📦'};
 const PILLAR_LABELS={broll:'B-Roll',liam:'Liam',race:'Race Weekend',bts:'BTS',team:'The Team',homebase:'Home Base',sponsor:'Sponsor'};
 const PILLAR_IC={broll:'🎥',liam:'🏎',race:'🏁',bts:'🔧',team:'👥',homebase:'🏠',sponsor:'🤝'};
 
 let isDemo=false,tok=null,all=[],filtered=[],view='grid',lbIdx=0,rootId=null,folderMap={};
+const STORED_CID_KEY='gpm_cid';
+const STORED_TOKEN_KEY='gpm_tok';
+const STORED_USER_KEY='gpm_user';
 let evF='',tyF='',plF='',statF='',statSubF='';
 
 const DEMO=[
@@ -493,13 +496,28 @@ function initTC(cid){
 }
 async function afterAuth(){
   const u=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+tok}}).then(r=>r.json());
+  // Store token and user info for auto-signin next time
+  try{
+    localStorage.setItem(STORED_TOKEN_KEY, tok);
+    localStorage.setItem(STORED_USER_KEY, JSON.stringify(u));
+    localStorage.setItem(STORED_CID_KEY, GPM_CLIENT_ID);
+  }catch(e){}
+  showAppWithUser(u);
+  initDrive();
+}
+function showAppWithUser(u){
   const ini=(u.name||'U').split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
   document.getElementById('tr').innerHTML=`<div class="ub"><img src="${u.picture||''}" class="ua" style="object-fit:cover" onerror="this.outerHTML='<div class=ua>${ini}</div>'"><div class="un">${u.name||''}</div></div><button class="btn-so" onclick="signOut()">Sign Out</button>`;
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
-  initDrive();
 }
-function signOut(){tok=null;all=[];isDemo=false;document.getElementById('app').style.display='none';document.getElementById('auth-screen').style.display='flex';document.getElementById('demo-bar').style.display='none';}
+function signOut(){
+  tok=null;all=[];isDemo=false;
+  try{localStorage.removeItem(STORED_TOKEN_KEY);localStorage.removeItem(STORED_USER_KEY);}catch(e){}
+  document.getElementById('app').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
+  document.getElementById('demo-bar').style.display='none';
+}
 
 // ── STAT BAR CLICK LOGIC ──
 function statClick(which){
@@ -568,45 +586,43 @@ async function drv(path,opts={}){
   const r=await fetch('https://www.googleapis.com/drive/v3/'+path,{...opts,headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json',...(opts.headers||{})}});
   return r.json();
 }
-async function mapExistingFolders(){
-  // Build folderMap from existing Drive structure so uploads go to right place
-  const q=encodeURIComponent('"'+rootId+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
-  const r=await drv('files?q='+q+'&fields=files(id,name)&pageSize=50');
-  for(const f of (r.files||[])){
-    folderMap[f.name]=f.id;
-    // Get subfolders
-    const q2=encodeURIComponent('"'+f.id+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
-    const r2=await drv('files?q='+q2+'&fields=files(id,name)&pageSize=20');
-    for(const sf of (r2.files||[])){
-      folderMap[sf.name]=sf.id;
-      // Get type subfolders
-      const q3=encodeURIComponent('"'+sf.id+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
-      const r3=await drv('files?q='+q3+'&fields=files(id,name)&pageSize=10');
-      for(const tf of (r3.files||[])){
-        folderMap[sf.name+'::'+tf.name]=tf.id;
-        folderMap[tf.name]=tf.id;
-      }
-    }
+async function findOrCreateFolder(name, parentId){
+  // Look for existing folder with this name inside parent
+  const q=encodeURIComponent('name="'+name+'" and "'+parentId+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
+  const r=await drv('files?q='+q+'&fields=files(id,name)&pageSize=5');
+  if(r.files&&r.files.length>0){
+    return r.files[0].id; // Found — return existing
   }
+  // Not found — create it
+  const cr=await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parentId]})
+  });
+  const d=await cr.json();
+  return d.id;
 }
-async function initDrive(){
-  toast('Connecting to Google Drive...','',10);
-  // Search specifically at root level to avoid duplicates
-  const q=encodeURIComponent('name="'+ROOT+'" and "root" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
-  const res=await drv('files?q='+q+'&fields=files(id,name)');
-  if(res.files&&res.files.length){rootId=res.files[0].id;hideToast();await mapExistingFolders();loadAssets();}
-  else{toast('Creating GPM Media Library...','',20);await mkFolders();loadAssets();}
-}
-async function mkFolder(name,pid){
-  const parents=pid?[pid]:['root'];
-  const r=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents})});
-  return (await r.json()).id;
-}
-async function mkFolders(){
-  rootId=await mkFolder(ROOT,'root');
-  const s26=await mkFolder('2026 Season',rootId);
+async function ensureFolderStructure(){
+  toast('Setting up GPM Media Library...','',10);
+  // Find or create root folder
+  const q=encodeURIComponent('name="'+ROOT+'" and mimeType="application/vnd.google-apps.folder" and trashed=false and "root" in parents');
+  const r=await drv('files?q='+q+'&fields=files(id,name)&pageSize=5');
+  if(r.files&&r.files.length>0){
+    rootId=r.files[0].id;
+  } else {
+    // Create at root
+    const cr=await fetch('https://www.googleapis.com/drive/v3/files',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},
+      body:JSON.stringify({name:ROOT,mimeType:'application/vnd.google-apps.folder',parents:['root']})
+    });
+    const d=await cr.json();
+    rootId=d.id;
+  }
+  folderMap['root']=rootId;
+  // Build full folder structure using find-or-create
+  const s26=await findOrCreateFolder('2026 Season',rootId);
   folderMap['2026 Season']=s26;
-  // All 2026 events
   const events=[
     'ZRS Round 2 — Barber (Apr 25-26)',
     'IGT Round 1 — Lime Rock (May 21-24)',
@@ -616,20 +632,30 @@ async function mkFolders(){
   ];
   const types=['Photos — Stills','Videos — Edited','Videos — Raw Footage','Reels — Vertical Cuts'];
   for(const ev of events){
-    const evId=await mkFolder(ev,s26);
+    const evId=await findOrCreateFolder(ev,s26);
     folderMap[ev]=evId;
     for(const ty of types){
-      const tyId=await mkFolder(ty,evId);
+      const tyId=await findOrCreateFolder(ty,evId);
       folderMap[ev+'::'+ty]=tyId;
     }
   }
-  const brand=await mkFolder('Brand Assets',rootId);
+  const brand=await findOrCreateFolder('Brand Assets',rootId);
   folderMap['Brand Assets']=brand;
-  await mkFolder('Logos',brand);await mkFolder('Team Portraits',brand);
-  const sp=await mkFolder('Sponsor Materials',rootId);
+  await findOrCreateFolder('Logos',brand);
+  await findOrCreateFolder('Team Portraits',brand);
+  const sp=await findOrCreateFolder('Sponsor Materials',rootId);
   folderMap['Sponsor Materials']=sp;
-  hideToast();toast('GPM Media Library created in Google Drive ✓','Full folder structure ready.',100);setTimeout(hideToast,3000);
+  hideToast();
+  toast('GPM Media Library ready ✓','',100);
+  setTimeout(hideToast,2000);
 }
+async function initDrive(){
+  toast('Connecting to Google Drive...','',10);
+  await ensureFolderStructure();
+  loadAssets();
+}
+// mkFolder replaced by findOrCreateFolder
+// mkFolders replaced by ensureFolderStructure
 async function loadAssets(){
   toast('Loading assets from Drive...','',20);
   const files=await getAllFiles(rootId);
@@ -720,23 +746,22 @@ async function confirmUpload(){
   });
 }
 async function getOrCreateUploadFolder(evName,tyName){
-  // Get or create event folder under 2026 Season
-  let seasonId=folderMap['2026 Season'];
-  if(!seasonId){seasonId=await mkFolder('2026 Season',rootId);folderMap['2026 Season']=seasonId;}
-  // Special cases for Brand Assets and Sponsor Materials
-  let evId;
+  const rootFolderId=folderMap['root']||rootId;
+  // Special cases
   if(evName==='Brand Assets'||evName==='Sponsor Materials'){
-    evId=folderMap[evName];
-    if(!evId){evId=await mkFolder(evName,rootId);folderMap[evName]=evId;}
-    return evId;
+    if(!folderMap[evName])folderMap[evName]=await findOrCreateFolder(evName,rootFolderId);
+    return folderMap[evName];
   }
-  evId=folderMap[evName];
-  if(!evId){evId=await mkFolder(evName,seasonId);folderMap[evName]=evId;}
-  // Get or create type subfolder
+  // Get/create season folder
+  if(!folderMap['2026 Season'])folderMap['2026 Season']=await findOrCreateFolder('2026 Season',rootFolderId);
+  const seasonId=folderMap['2026 Season'];
+  // Get/create event folder
+  if(!folderMap[evName])folderMap[evName]=await findOrCreateFolder(evName,seasonId);
+  const evId=folderMap[evName];
+  // Get/create type subfolder
   const subKey=evName+'::'+tyName;
-  let subId=folderMap[subKey];
-  if(!subId){subId=await mkFolder(tyName,evId);folderMap[subKey]=subId;}
-  return subId;
+  if(!folderMap[subKey])folderMap[subKey]=await findOrCreateFolder(tyName,evId);
+  return folderMap[subKey];
 }
 async function upFileToFolder(file,folderId,pillar){
   const desc=pillar?'pillar:'+pillar:'';
@@ -910,6 +935,74 @@ function cpTxt(txt){navigator.clipboard.writeText(txt).then(()=>{toast('Link cop
 function setView(v){view=v;document.getElementById('bg').classList.toggle('active',v==='grid');document.getElementById('bl').classList.toggle('active',v==='list');renderGallery();}
 function toast(ti,msg,pct){document.getElementById('toast').classList.add('show');document.getElementById('t-ti').textContent=ti;document.getElementById('t-msg').textContent=msg;document.getElementById('t-pf').style.width=pct+'%';}
 function hideToast(){document.getElementById('toast').classList.remove('show');}
+
+// ── AUTO SIGNIN ON PAGE LOAD ──
+// Check if we have a stored token — if so, verify it's still valid and skip the sign-in screen
+async function tryAutoSignin(){
+  try{
+    const storedTok=localStorage.getItem(STORED_TOKEN_KEY);
+    const storedUser=localStorage.getItem(STORED_USER_KEY);
+    if(!storedTok||!storedUser)return false;
+    // Verify token is still valid with a quick API call
+    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+storedTok}});
+    if(r.ok){
+      tok=storedTok;
+      const u=JSON.parse(storedUser);
+      showAppWithUser(u);
+      initDrive();
+      return true;
+    } else {
+      // Token expired — clear it and try silent re-auth
+      localStorage.removeItem(STORED_TOKEN_KEY);
+      localStorage.removeItem(STORED_USER_KEY);
+      return false;
+    }
+  }catch(e){return false;}
+}
+
+async function trySilentReauth(){
+  // If stored CID exists, try to get a new token silently using prompt:none
+  const cid=localStorage.getItem(STORED_CID_KEY)||GPM_CLIENT_ID;
+  if(!cid)return false;
+  return new Promise((resolve)=>{
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>{
+      try{
+        const tc=google.accounts.oauth2.initTokenClient({
+          client_id:cid,scope:SCOPES,
+          prompt:'none', // Silent — no popup
+          callback:(r)=>{
+            if(r.access_token){
+              tok=r.access_token;
+              try{localStorage.setItem(STORED_TOKEN_KEY,tok);}catch(e){}
+              afterAuth();
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          }
+        });
+        tc.requestAccessToken({prompt:'none'});
+      }catch(e){resolve(false);}
+    };
+    s.onerror=()=>resolve(false);
+    document.head.appendChild(s);
+  });
+}
+
+// Run auto-signin on load
+(async()=>{
+  const ok=await tryAutoSignin();
+  if(!ok){
+    // Token expired — try silent re-auth
+    const reauthed=await trySilentReauth();
+    if(!reauthed){
+      // Show sign-in screen — user needs to click once
+      document.getElementById('auth-screen').style.display='flex';
+    }
+  }
+})();
 
 function ddEvChange(){
   evF=document.getElementById('fe').value;
