@@ -583,7 +583,11 @@ function clearStatFilter(){
 
 // ── DRIVE ──
 async function drv(path,opts={}){
-  const r=await fetch('https://www.googleapis.com/drive/v3/'+path,{...opts,headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json',...(opts.headers||{})}});
+  // Don't set Content-Type for multipart/FormData requests — let browser set boundary automatically
+  const baseHeaders={Authorization:'Bearer '+tok};
+  const isJson=!opts.body||typeof opts.body==='string';
+  if(isJson)baseHeaders['Content-Type']='application/json';
+  const r=await fetch('https://www.googleapis.com/drive/v3/'+path,{...opts,headers:{...baseHeaders,...(opts.headers||{})}});
   return r.json();
 }
 async function findOrCreateFolder(name, parentId){
@@ -730,20 +734,34 @@ async function confirmUpload(){
   closeUpModal();
   // Find or create the target folder
   const targetId=await getOrCreateUploadFolder(evName,tyName);
-  pendingFiles.forEach((f,i)=>{
-    toast('Uploading '+(i+1)+'/'+pendingFiles.length,f.name,Math.round(i/pendingFiles.length*90));
-    upFileToFolder(f,targetId,pillar).then(nf=>{
-      const asset=mapF(nf);
-      if(pillar)asset.pillar=pillar;
-      asset.event=evName;
-      all.unshift(asset);
-      renderAll();
-      if(i===pendingFiles.length-1){
-        toast('Upload complete ✓',pendingFiles.length+' file(s) → '+evName+' / '+tyName,100);
-        setTimeout(hideToast,3000);
+  if(!targetId){toast('Error: could not find or create folder','',100);return;}
+  // Upload files sequentially so we can properly track success/failure
+  for(let i=0;i<pendingFiles.length;i++){
+    const f=pendingFiles[i];
+    toast('Uploading '+(i+1)+'/'+pendingFiles.length,f.name,Math.round((i/pendingFiles.length)*90));
+    try{
+      const nf=await upFileToFolder(f,targetId,pillar);
+      if(nf&&nf.id){
+        const asset=mapF(nf);
+        if(pillar)asset.pillar=pillar;
+        asset.event=evName;
+        all.unshift(asset);
+        renderAll();
+      } else {
+        console.error('Upload response missing id:',nf);
+        toast('Upload failed — check Drive permissions','',100);
+        setTimeout(hideToast,4000);
+        return;
       }
-    });
-  });
+    } catch(err){
+      console.error('Upload error:',err);
+      toast('Upload error: '+err.message,'',100);
+      setTimeout(hideToast,4000);
+      return;
+    }
+  }
+  toast('Upload complete ✓',pendingFiles.length+' file(s) → '+evName+' / '+tyName,100);
+  setTimeout(hideToast,3000);
 }
 async function getOrCreateUploadFolder(evName,tyName){
   const rootFolderId=folderMap['root']||rootId;
@@ -769,7 +787,12 @@ async function upFileToFolder(file,folderId,pillar){
   const form=new FormData();
   form.append('metadata',new Blob([meta],{type:'application/json'}));
   form.append('file',file);
-  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink,description,parents',{method:'POST',headers:{Authorization:'Bearer '+tok},body:form});
+  // Must NOT set Content-Type manually for multipart — browser sets it with correct boundary
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink,description,parents',{
+    method:'POST',
+    headers:{Authorization:'Bearer '+tok},
+    body:form
+  });
   return r.json();
 }
 function upFiles(files){
