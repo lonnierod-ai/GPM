@@ -213,12 +213,11 @@ select.fs{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font
     <div class="auth-icon">📸</div>
     <div class="auth-title">GPM Media Library</div>
     <div class="auth-sub">Sign in with Google to access the team's photo and video archive. All assets live in your Google Drive — nothing stored elsewhere.</div>
-    <label class="auth-lbl">Google OAuth Client ID</label>
-    <input class="auth-input" id="cid" type="text" placeholder="123456789-abc.apps.googleusercontent.com" spellcheck="false">
+    <input class="auth-input" id="cid" type="hidden" value="">
     <button class="btn-primary" onclick="startAuth()">Sign In with Google</button>
     <div style="text-align:center;font-size:12px;color:var(--muted);margin:4px 0">— or —</div>
     <button class="btn-secondary" onclick="launchDemo()">Preview in Demo Mode</button>
-    <div class="auth-note">No Client ID yet? <a href="#" onclick="showSetup();return false">View the 5-minute Google Cloud setup guide</a></div>
+
   </div>
 </div>
 
