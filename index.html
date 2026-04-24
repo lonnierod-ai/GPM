@@ -168,6 +168,24 @@ select.fs{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font
 .ssc strong{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
 .ssc p{font-size:12px;color:var(--muted);line-height:1.5}
 .ssc a{color:var(--blue)}
+
+/* UPLOAD MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal-box{background:white;border-radius:12px;padding:28px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2)}
+.modal-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:var(--text)}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+.modal-field{margin-bottom:14px}
+.modal-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;display:block;margin-bottom:5px}
+.modal-select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--page);outline:none;cursor:pointer}
+.modal-select:focus{border-color:var(--blue)}
+.modal-files{background:var(--page);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--muted);margin-bottom:16px;max-height:80px;overflow-y:auto;font-family:'DM Mono',monospace}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+.modal-btn-cancel{padding:9px 18px;background:transparent;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--muted);cursor:pointer}
+.modal-btn-cancel:hover{background:var(--page)}
+.modal-btn-go{padding:9px 20px;background:var(--blue);color:white;border:none;border-radius:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.5px;text-transform:uppercase;cursor:pointer}
+.modal-btn-go:hover{background:var(--race)}
+.modal-btn-go:disabled{opacity:0.4;cursor:not-allowed}
 @media(max-width:640px){
   .sidebar{display:none}
   .app-body,.app-body.with-subfilt{height:auto;min-height:300px}
@@ -294,7 +312,7 @@ select.fs{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font
       <button class="vb" id="bl" onclick="setView('list')">☰</button>
     </div>
     <button class="btn-up" onclick="document.getElementById('fi').click()">↑ Upload</button>
-    <input type="file" id="fi" multiple accept="image/*,video/*" onchange="handleSel(event)" style="display:none">
+    <input type="file" id="fi" multiple accept="image/*,video/*" onchange="openUpModal(event)" style="display:none">
   </div>
 
   <!-- APP BODY -->
@@ -324,6 +342,55 @@ select.fs{padding:7px 10px;border:1px solid var(--border);border-radius:6px;font
         <div class="dz-tx"><strong>Drop files here</strong> or click to upload<br>Photos and videos upload directly to Google Drive</div>
       </div>
       <div id="gc"></div>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD MODAL -->
+<div class="modal-overlay" id="up-modal">
+  <div class="modal-box">
+    <div class="modal-title">Upload Assets</div>
+    <div class="modal-sub" id="up-modal-sub">Select where these files belong in the GPM Media Library.</div>
+    <div class="modal-files" id="up-modal-files"></div>
+    <div class="modal-field">
+      <label class="modal-label">Event / Folder</label>
+      <select class="modal-select" id="up-event">
+        <option value="">— Select event —</option>
+        <option value="ZRS Round 2 — Barber (Apr 25-26)">ZRS Round 2 — Barber (Apr 25-26)</option>
+        <option value="IGT Round 1 — Lime Rock (May 21-24)">IGT Round 1 — Lime Rock (May 21-24)</option>
+        <option value="IGT Round 2 — Mid-Ohio (Jun 11-14)">IGT Round 2 — Mid-Ohio (Jun 11-14)</option>
+        <option value="IGT Round 3 — Road America (Jun 25-28)">IGT Round 3 — Road America (Jun 25-28)</option>
+        <option value="IGT Round 4 — Watkins Glen (Jul 10-12)">IGT Round 4 — Watkins Glen (Jul 10-12)</option>
+        <option value="Brand Assets">Brand Assets</option>
+        <option value="Sponsor Materials">Sponsor Materials</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Asset Type</label>
+      <select class="modal-select" id="up-type">
+        <option value="">— Select type —</option>
+        <option value="Photos — Stills">📷 Photos — Stills</option>
+        <option value="Videos — Edited">🎬 Videos — Edited</option>
+        <option value="Videos — Raw Footage">📦 Videos — Raw Footage</option>
+        <option value="Reels — Vertical Cuts">📱 Reels — Vertical Cuts</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Content Pillar (optional)</label>
+      <select class="modal-select" id="up-pillar">
+        <option value="">— Select pillar —</option>
+        <option value="broll">🎥 B-Roll</option>
+        <option value="liam">🏎 Liam</option>
+        <option value="race">🏁 Race Weekend</option>
+        <option value="bts">🔧 BTS</option>
+        <option value="team">👥 The Team</option>
+        <option value="homebase">🏠 Home Base</option>
+        <option value="sponsor">🤝 Sponsor</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="closeUpModal()">Cancel</button>
+      <button class="modal-btn-go" id="up-modal-go" onclick="confirmUpload()" disabled>Upload to Drive →</button>
     </div>
   </div>
 </div>
@@ -371,7 +438,7 @@ const TI={photo:'🖼',video:'🎬',reel:'📱',raw:'📦'};
 const PILLAR_LABELS={broll:'B-Roll',liam:'Liam',race:'Race Weekend',bts:'BTS',team:'The Team',homebase:'Home Base',sponsor:'Sponsor'};
 const PILLAR_IC={broll:'🎥',liam:'🏎',race:'🏁',bts:'🔧',team:'👥',homebase:'🏠',sponsor:'🤝'};
 
-let isDemo=false,tok=null,all=[],filtered=[],view='grid',lbIdx=0,rootId=null;
+let isDemo=false,tok=null,all=[],filtered=[],view='grid',lbIdx=0,rootId=null,folderMap={};
 let evF='',tyF='',plF='',statF='',statSubF='';
 
 const DEMO=[
@@ -502,11 +569,32 @@ async function drv(path,opts={}){
   const r=await fetch('https://www.googleapis.com/drive/v3/'+path,{...opts,headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json',...(opts.headers||{})}});
   return r.json();
 }
+async function mapExistingFolders(){
+  // Build folderMap from existing Drive structure so uploads go to right place
+  const q=encodeURIComponent('"'+rootId+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
+  const r=await drv('files?q='+q+'&fields=files(id,name)&pageSize=50');
+  for(const f of (r.files||[])){
+    folderMap[f.name]=f.id;
+    // Get subfolders
+    const q2=encodeURIComponent('"'+f.id+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
+    const r2=await drv('files?q='+q2+'&fields=files(id,name)&pageSize=20');
+    for(const sf of (r2.files||[])){
+      folderMap[sf.name]=sf.id;
+      // Get type subfolders
+      const q3=encodeURIComponent('"'+sf.id+'" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
+      const r3=await drv('files?q='+q3+'&fields=files(id,name)&pageSize=10');
+      for(const tf of (r3.files||[])){
+        folderMap[sf.name+'::'+tf.name]=tf.id;
+        folderMap[tf.name]=tf.id;
+      }
+    }
+  }
+}
 async function initDrive(){
   toast('Connecting to Google Drive...','',10);
   const q=encodeURIComponent('"'+ROOT+'" in name and mimeType="application/vnd.google-apps.folder" and trashed=false');
   const res=await drv('files?q='+q+'&fields=files(id,name)');
-  if(res.files&&res.files.length){rootId=res.files[0].id;hideToast();loadAssets();}
+  if(res.files&&res.files.length){rootId=res.files[0].id;hideToast();await mapExistingFolders();loadAssets();}
   else{toast('Creating GPM Media Library...','',20);await mkFolders();loadAssets();}
 }
 async function mkFolder(name,pid){
@@ -516,15 +604,30 @@ async function mkFolder(name,pid){
 async function mkFolders(){
   rootId=await mkFolder(ROOT,null);
   const s26=await mkFolder('2026 Season',rootId);
-  const barber=await mkFolder('ZRS Round 2 — Barber (Apr 25-26)',s26);
-  await mkFolder('Photos — Stills',barber);
-  await mkFolder('Videos — Raw Footage',barber);
-  await mkFolder('Videos — Edited',barber);
-  await mkFolder('Reels — Vertical Cuts',barber);
+  folderMap['2026 Season']=s26;
+  // All 2026 events
+  const events=[
+    'ZRS Round 2 — Barber (Apr 25-26)',
+    'IGT Round 1 — Lime Rock (May 21-24)',
+    'IGT Round 2 — Mid-Ohio (Jun 11-14)',
+    'IGT Round 3 — Road America (Jun 25-28)',
+    'IGT Round 4 — Watkins Glen (Jul 10-12)',
+  ];
+  const types=['Photos — Stills','Videos — Edited','Videos — Raw Footage','Reels — Vertical Cuts'];
+  for(const ev of events){
+    const evId=await mkFolder(ev,s26);
+    folderMap[ev]=evId;
+    for(const ty of types){
+      const tyId=await mkFolder(ty,evId);
+      folderMap[ev+'::'+ty]=tyId;
+    }
+  }
   const brand=await mkFolder('Brand Assets',rootId);
+  folderMap['Brand Assets']=brand;
   await mkFolder('Logos',brand);await mkFolder('Team Portraits',brand);
-  await mkFolder('Sponsor Materials',rootId);
-  hideToast();toast('GPM Media Library created in Google Drive ✓','Folder structure ready.',100);setTimeout(hideToast,3000);
+  const sp=await mkFolder('Sponsor Materials',rootId);
+  folderMap['Sponsor Materials']=sp;
+  hideToast();toast('GPM Media Library created in Google Drive ✓','Full folder structure ready.',100);setTimeout(hideToast,3000);
 }
 async function loadAssets(){
   toast('Loading assets from Drive...','',20);
@@ -534,7 +637,7 @@ async function loadAssets(){
 async function getAllFiles(fid){
   let out=[];
   const q=encodeURIComponent('"'+fid+'" in parents and trashed=false');
-  const r=await drv('files?q='+q+'&fields=files(id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink)&pageSize=200');
+  const r=await drv('files?q='+q+'&fields=files(id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink,description,parents)&pageSize=200');
   for(const f of (r.files||[])){
     if(f.mimeType==='application/vnd.google-apps.folder'){out=out.concat(await getAllFiles(f.id));}
     else out.push(f);
@@ -559,10 +662,90 @@ function mapF(f){
   const size=b>1073741824?(b/1073741824).toFixed(1)+' GB':b>1048576?(b/1048576).toFixed(1)+' MB':b>1024?(b/1024).toFixed(0)+' KB':'';
   const d=new Date(f.modifiedTime);
   const date=d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  // Read pillar from description if available
+  if(f.description&&f.description.startsWith('pillar:')){pillar=f.description.replace('pillar:','');}
   return{id:f.id,name:f.name,type,event:'ZRS R2 — Barber',pillar,size,date,thumb:f.thumbnailLink,url:f.webViewLink,mime:f.mimeType,tags:[]};
 }
 
 function handleSel(e){upFiles(Array.from(e.target.files));}
+
+// ── UPLOAD MODAL ──
+let pendingFiles=[];
+function openUpModal(e,files){
+  pendingFiles=files||(e?Array.from(e.target.files):[]);
+  if(!pendingFiles.length)return;
+  if(isDemo){toast('Demo mode — connect Google Drive to upload','',100);setTimeout(hideToast,2500);return;}
+  const sub=document.getElementById('up-modal-sub');
+  sub.textContent=pendingFiles.length+' file'+(pendingFiles.length!==1?'s':'')+' ready to upload';
+  document.getElementById('up-modal-files').textContent=pendingFiles.map(f=>f.name).join(', ');
+  document.getElementById('up-event').value='';
+  document.getElementById('up-type').value='';
+  document.getElementById('up-pillar').value='';
+  document.getElementById('up-modal-go').disabled=true;
+  document.getElementById('up-modal').classList.add('open');
+}
+function closeUpModal(){
+  document.getElementById('up-modal').classList.remove('open');
+  document.getElementById('fi').value='';
+  pendingFiles=[];
+}
+document.getElementById('up-event').addEventListener('change',checkUpReady);
+document.getElementById('up-type').addEventListener('change',checkUpReady);
+function checkUpReady(){
+  const ev=document.getElementById('up-event').value;
+  const ty=document.getElementById('up-type').value;
+  document.getElementById('up-modal-go').disabled=!(ev&&ty);
+}
+async function confirmUpload(){
+  const evName=document.getElementById('up-event').value;
+  const tyName=document.getElementById('up-type').value;
+  const pillar=document.getElementById('up-pillar').value;
+  closeUpModal();
+  // Find or create the target folder
+  const targetId=await getOrCreateUploadFolder(evName,tyName);
+  pendingFiles.forEach((f,i)=>{
+    toast('Uploading '+(i+1)+'/'+pendingFiles.length,f.name,Math.round(i/pendingFiles.length*90));
+    upFileToFolder(f,targetId,pillar).then(nf=>{
+      const asset=mapF(nf);
+      if(pillar)asset.pillar=pillar;
+      asset.event=evName;
+      all.unshift(asset);
+      renderAll();
+      if(i===pendingFiles.length-1){
+        toast('Upload complete ✓',pendingFiles.length+' file(s) → '+evName+' / '+tyName,100);
+        setTimeout(hideToast,3000);
+      }
+    });
+  });
+}
+async function getOrCreateUploadFolder(evName,tyName){
+  // Get or create event folder under 2026 Season
+  let seasonId=folderMap['2026 Season'];
+  if(!seasonId){seasonId=await mkFolder('2026 Season',rootId);folderMap['2026 Season']=seasonId;}
+  // Special cases for Brand Assets and Sponsor Materials
+  let evId;
+  if(evName==='Brand Assets'||evName==='Sponsor Materials'){
+    evId=folderMap[evName];
+    if(!evId){evId=await mkFolder(evName,rootId);folderMap[evName]=evId;}
+    return evId;
+  }
+  evId=folderMap[evName];
+  if(!evId){evId=await mkFolder(evName,seasonId);folderMap[evName]=evId;}
+  // Get or create type subfolder
+  const subKey=evName+'::'+tyName;
+  let subId=folderMap[subKey];
+  if(!subId){subId=await mkFolder(tyName,evId);folderMap[subKey]=subId;}
+  return subId;
+}
+async function upFileToFolder(file,folderId,pillar){
+  const desc=pillar?'pillar:'+pillar:'';
+  const meta=JSON.stringify({name:file.name,parents:[folderId],description:desc});
+  const form=new FormData();
+  form.append('metadata',new Blob([meta],{type:'application/json'}));
+  form.append('file',file);
+  const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,thumbnailLink,webViewLink,description,parents',{method:'POST',headers:{Authorization:'Bearer '+tok},body:form});
+  return r.json();
+}
 function upFiles(files){
   if(!files.length)return;
   if(isDemo){toast('Demo mode — connect Google Drive to upload files','',100);setTimeout(hideToast,2500);return;}
@@ -583,7 +766,7 @@ async function upFile(file){
 const dz=document.getElementById('dz');
 dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
 dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');upFiles(Array.from(e.dataTransfer.files));});
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');openUpModal(null,Array.from(e.dataTransfer.files));});
 
 function renderAll(){updStats();buildSbEv();filter();}
 function updStats(){
