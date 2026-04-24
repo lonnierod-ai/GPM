@@ -591,17 +591,19 @@ async function mapExistingFolders(){
 }
 async function initDrive(){
   toast('Connecting to Google Drive...','',10);
-  const q=encodeURIComponent('"'+ROOT+'" in name and mimeType="application/vnd.google-apps.folder" and trashed=false');
+  // Search specifically at root level to avoid duplicates
+  const q=encodeURIComponent('name="'+ROOT+'" and "root" in parents and mimeType="application/vnd.google-apps.folder" and trashed=false');
   const res=await drv('files?q='+q+'&fields=files(id,name)');
   if(res.files&&res.files.length){rootId=res.files[0].id;hideToast();await mapExistingFolders();loadAssets();}
   else{toast('Creating GPM Media Library...','',20);await mkFolders();loadAssets();}
 }
 async function mkFolder(name,pid){
-  const r=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:pid?[pid]:[]})});
+  const parents=pid?[pid]:['root'];
+  const r=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents})});
   return (await r.json()).id;
 }
 async function mkFolders(){
-  rootId=await mkFolder(ROOT,null);
+  rootId=await mkFolder(ROOT,'root');
   const s26=await mkFolder('2026 Season',rootId);
   folderMap['2026 Season']=s26;
   // All 2026 events
